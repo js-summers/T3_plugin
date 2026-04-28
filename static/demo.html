@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Protein Demo (HTML only)</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 2rem; background: #f6f8fb; color: #1f2937; }
+      .card { background: #fff; border: 1px solid #dbe3ef; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; }
+      input, textarea, button, select { width: 100%; padding: .6rem; margin-top: .3rem; border: 1px solid #c7d2e0; border-radius: 8px; box-sizing: border-box; }
+      textarea { min-height: 100px; }
+      button { background: #2563eb; color: white; border: none; font-weight: 600; cursor: pointer; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap: .7rem; }
+      .metric { border: 1px solid #dbe3ef; border-radius: 8px; padding: .6rem; }
+      pre { background:#f8fafc; border: 1px solid #dbe3ef; border-radius:8px; padding:.75rem; overflow:auto; }
+      .muted { color: #64748b; }
+    </style>
+  </head>
+  <body>
+    <h1>Protein Evaluation Demo (.html)</h1>
+    <p class="muted">This page can run in <strong>Mock mode</strong> (no backend) or <strong>Live API mode</strong> (calls <code>/analyze</code>).</p>
+
+    <div class="card">
+      <label>Mode
+        <select id="mode">
+          <option value="mock">Mock (works as plain HTML file)</option>
+          <option value="live">Live API (/analyze)</option>
+        </select>
+      </label>
+      <label>Protein name
+        <input id="proteinName" placeholder="e.g. hemoglobin subunit beta" />
+      </label>
+      <label>Sequence
+        <textarea id="sequence" placeholder="e.g. MKWVTFISLLFLFSSAYS..."></textarea>
+      </label>
+      <button id="runBtn">Run demo</button>
+      <p id="status" class="muted"></p>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+      const mockResponse = {
+        input: { source: "mock", protein_name: "demo_protein" },
+        sequence: "MKWVTFISLLFLFSSAYSRGVFRRDTHKSEIAHRFKDLGE",
+        protparam: {
+          length: 44,
+          molecular_weight: 5121.62,
+          isoelectric_point: 8.76,
+          gravy: -0.201,
+          aromaticity: 0.0682,
+          instability_index: 35.2,
+          amino_acid_composition: { A: 0.0909, C: 0.0, D: 0.0455, E: 0.0682, F: 0.1136, G: 0.0455, H: 0.0455, I: 0.0682, K: 0.0682, L: 0.0682, M: 0.0227, N: 0.0, P: 0.0, Q: 0.0, R: 0.1364, S: 0.0909, T: 0.0455, V: 0.0455, W: 0.0227, Y: 0.0227 }
+        },
+        secretion_prediction: { module: "Secretion Prediction (Placeholder)", status: "placeholder", message: "Demo stub only" },
+        golden_gate_primer_design: { module: "Golden Gate Primer Design (Placeholder)", status: "placeholder", message: "Demo stub only" }
+      };
+
+      function card(title, inner) {
+        return `<div class="card"><h3>${title}</h3>${inner}</div>`;
+      }
+
+      function render(res) {
+        const p = res.protparam;
+        const aa = Object.entries(p.amino_acid_composition).map(([k,v]) => `${k}: ${v}`).join("\n");
+        document.getElementById("results").innerHTML =
+          card("Input", `<pre>${JSON.stringify(res.input, null, 2)}</pre>`) +
+          card("ProtParam", `<div class="grid">
+              <div class="metric"><b>Length</b><br>${p.length}</div>
+              <div class="metric"><b>Molecular Weight</b><br>${p.molecular_weight}</div>
+              <div class="metric"><b>Isoelectric Point</b><br>${p.isoelectric_point}</div>
+              <div class="metric"><b>GRAVY</b><br>${p.gravy}</div>
+              <div class="metric"><b>Aromaticity</b><br>${p.aromaticity}</div>
+              <div class="metric"><b>Instability Index</b><br>${p.instability_index}</div>
+           </div><h4>Amino Acid Composition</h4><pre>${aa}</pre>`) +
+          card("Secretion Prediction (Placeholder)", `<pre>${JSON.stringify(res.secretion_prediction, null, 2)}</pre>`) +
+          card("Golden Gate Primer Design (Placeholder)", `<pre>${JSON.stringify(res.golden_gate_primer_design, null, 2)}</pre>`);
+      }
+
+      document.getElementById("runBtn").addEventListener("click", async () => {
+        const mode = document.getElementById("mode").value;
+        const proteinName = document.getElementById("proteinName").value.trim();
+        const sequence = document.getElementById("sequence").value.trim();
+        const payload = {};
+        if (proteinName) payload.protein_name = proteinName;
+        if (sequence) payload.sequence = sequence;
+
+        const status = document.getElementById("status");
+        status.textContent = "Running...";
+
+        try {
+          if (mode === "mock") {
+            render({ ...mockResponse, input: { source: "mock", protein_name: proteinName || "demo_protein" }, sequence: sequence || mockResponse.sequence });
+          } else {
+            const resp = await fetch("/analyze", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.detail || "API request failed");
+            render(data);
+          }
+          status.textContent = "Done.";
+        } catch (e) {
+          status.textContent = `Error: ${e.message}`;
+        }
+      });
+    </script>
+  </body>
+</html>
