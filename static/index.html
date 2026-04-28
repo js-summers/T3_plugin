@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Protein Evaluation Demo</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f4f7fb;
+        --card: #ffffff;
+        --text: #213547;
+        --muted: #6a7685;
+        --accent: #2563eb;
+        --border: #dce3ec;
+      }
+
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .container {
+        max-width: 980px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+      }
+
+      h1, h2, h3 {
+        margin-top: 0;
+      }
+
+      .inputs {
+        display: grid;
+        gap: 0.75rem;
+      }
+
+      input, textarea, button {
+        width: 100%;
+        box-sizing: border-box;
+        font-size: 0.95rem;
+        padding: 0.65rem;
+        border-radius: 8px;
+        border: 1px solid #c9d2de;
+      }
+
+      textarea {
+        min-height: 120px;
+      }
+
+      button {
+        background: var(--accent);
+        color: white;
+        font-weight: bold;
+        border: none;
+        cursor: pointer;
+      }
+
+      button:hover {
+        filter: brightness(0.95);
+      }
+
+      .muted {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 0.75rem;
+      }
+
+      .metric {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.65rem;
+      }
+
+      pre {
+        background: #f8fafc;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.75rem;
+        overflow-x: auto;
+      }
+
+      .error {
+        color: #b42318;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Protein Evaluation Demo</h1>
+      <p class="muted">Enter either a protein name (UniProt lookup) or a raw amino acid sequence.</p>
+
+      <div class="card">
+        <div class="inputs">
+          <label>
+            Protein name
+            <input id="proteinName" placeholder="e.g. hemoglobin subunit beta" />
+          </label>
+          <label>
+            Sequence
+            <textarea id="sequence" placeholder="e.g. MTEITAAMVKELRESTGAG..."></textarea>
+          </label>
+          <button id="analyzeBtn">Analyze Protein</button>
+          <div id="status" class="muted"></div>
+        </div>
+      </div>
+
+      <div id="results"></div>
+    </div>
+
+    <script>
+      const resultsDiv = document.getElementById("results");
+      const statusDiv = document.getElementById("status");
+
+      function renderObject(obj) {
+        return `<pre>${JSON.stringify(obj, null, 2)}</pre>`;
+      }
+
+      function metricCard(title, value) {
+        return `<div class="metric"><strong>${title}</strong><br/>${value}</div>`;
+      }
+
+      document.getElementById("analyzeBtn").addEventListener("click", async () => {
+        const proteinName = document.getElementById("proteinName").value.trim();
+        const sequence = document.getElementById("sequence").value.trim();
+
+        statusDiv.textContent = "Running analysis...";
+        resultsDiv.innerHTML = "";
+
+        const payload = {};
+        if (proteinName) payload.protein_name = proteinName;
+        if (sequence) payload.sequence = sequence;
+
+        try {
+          const res = await fetch("/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.detail || "Request failed");
+          }
+
+          const p = data.protparam;
+          const aaComp = Object.entries(p.amino_acid_composition)
+            .map(([aa, val]) => `${aa}: ${val}`)
+            .join("\n");
+
+          resultsDiv.innerHTML = `
+            <div class="card">
+              <h2>Input Source</h2>
+              ${renderObject(data.input)}
+            </div>
+
+            <div class="card">
+              <h2>ProtParam Results</h2>
+              <div class="grid">
+                ${metricCard("Length", p.length)}
+                ${metricCard("Molecular Weight", p.molecular_weight)}
+                ${metricCard("Isoelectric Point", p.isoelectric_point)}
+                ${metricCard("GRAVY", p.gravy)}
+                ${metricCard("Aromaticity", p.aromaticity)}
+                ${metricCard("Instability Index", p.instability_index)}
+              </div>
+              <h3 style="margin-top: 1rem">Amino Acid Composition</h3>
+              <pre>${aaComp}</pre>
+            </div>
+
+            <div class="card">
+              <h2>Secretion Prediction (Placeholder)</h2>
+              ${renderObject(data.secretion_prediction)}
+            </div>
+
+            <div class="card">
+              <h2>Golden Gate Primer Design (Placeholder)</h2>
+              ${renderObject(data.golden_gate_primer_design)}
+            </div>
+          `;
+
+          statusDiv.textContent = "Done.";
+        } catch (err) {
+          statusDiv.innerHTML = `<span class="error">Error: ${err.message}</span>`;
+        }
+      });
+    </script>
+  </body>
+</html>
